@@ -26,3 +26,13 @@ provider "yandex" {
   folder_id = var.folder_id
   zone      = var.zone_a
 }
+
+provider "helm" {
+  kubernetes {
+    config_path = pathexpand(var.kube_config)
+  }
+}
+
+provider "kubernetes" {
+  config_path = pathexpand(var.kube_config)
+}

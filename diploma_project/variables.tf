@@ -148,3 +148,29 @@ variable "k8s_cluster_node_group_metadata" {
   }
   description = "Default resources of k8s node group"
 }
+
+variable "kube_config" {
+  type    = string
+  default = "~/.kube/config"
+  description = "Path for kubeconfig"
+}
+
+### monitoring vars
+variable "monitoring_metadata" {
+  type = object({
+    name       = string
+    namespace  = string
+    version    = string
+    repository = string
+    chart      = string
+  })
+
+  default = {
+    name       = "kube-prometheus-stack"
+    namespace  = "monitoring"
+    version    = "61.9.0"
+    repository = "https://prometheus-community.github.io/helm-charts"
+    chart      = "kube-prometheus-stack"
+  }
+  description = "Default resources of kube-prometheus-stack chart"
+}
