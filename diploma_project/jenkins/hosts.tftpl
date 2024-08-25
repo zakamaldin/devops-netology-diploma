@@ -1,0 +1,23 @@
+---
+all:
+  hosts:
+    jenkins-master:
+      ansible_host: ${jenkins_master["network_interface"][0]["nat_ip_address"]}
+    %{~ for node in jenkins_agents ~}
+    ${node["name"]}:
+      ansible_host: ${node["network_interface"][0]["nat_ip_address"]}  
+    %{~ endfor ~}
+jenkins:
+  children:
+    jenkins_masters:
+      hosts:
+        jenkins-master:
+    jenkins_agents:
+      hosts:
+        %{~ for node in jenkins_agents ~}
+        ${node["name"]}:
+        %{~ endfor ~}
+  vars:
+    ansible_connection_type: ssh
+    ansible_user: fedora
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'

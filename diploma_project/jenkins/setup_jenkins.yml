@@ -1,0 +1,171 @@
+---
+- name: Preapre all hosts
+  hosts: all
+  gather_facts: false
+  become: true
+  become_user: root
+  tasks:
+    - name: Wait jenkins machines to become reachable
+      become: false
+      ansible.builtin.wait_for_connection:
+        timeout: 900
+    - name: Gather facts after jenkins machines became reachable
+      become: false
+      ansible.builtin.setup:
+    - name: Create group
+      ansible.builtin.group:
+        name: "{{ user_group }}"
+        state: present
+    - name: Create user
+      ansible.builtin.user:
+        name: "{{ user_name }}"
+        generate_ssh_key: true
+      register: ssh_key_info
+    - name: Install JDK
+      ansible.builtin.package:
+        name: "{{ java_packages }}"
+        state: present
+
+- name: Get Jenkins master installed
+  hosts: jenkins_masters
+  become: true
+  become_user: root
+  tasks:
+    - name: Get repo Jenkins
+      ansible.builtin.get_url:
+        url: https://pkg.jenkins.io/redhat-stable/jenkins.repo
+        dest: /etc/yum.repos.d/jenkins.repo
+        validate_certs: false
+        mode: "0755"
+    - name: Add Jenkins key
+      ansible.builtin.rpm_key:
+        key: https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+        state: present
+        validate_certs: false
+    - name: Install Jenkins and requirements
+      changed_when: true
+      ansible.builtin.dnf:
+        name:
+          - jenkins
+          - git
+        state: present
+      notify:
+        - Start jenkins
+    - name: Flush handlers
+      ansible.builtin.meta: flush_handlers
+    - name: Ensure jenkins agents are present in known_hosts file
+      become: true
+      become_user: "{{ jenkins_user_name }}"
+      ansible.builtin.known_hosts:
+        name: "{{ hostvars[item].ansible_host }}"
+        state: present
+        key: "{{ lookup('pipe', 'ssh-keyscan {{ hostvars[item].ansible_host }}') }}"
+        hash_host: true
+      with_items: "{{ groups.jenkins_agents }}"
+  handlers:
+    - name: Start jenkins
+      ansible.builtin.systemd:
+        name: jenkins
+        state: restarted
+        enabled: true
+- name: Prepare jenkins agents
+  hosts: jenkins_agents
+  become: true
+  become_user: root
+  tasks:
+    - name: Add master publickey into authorized_key
+      become: true
+      become_user: "{{ jenkins_user_name }}"
+      ansible.posix.authorized_key:
+        user: "{{ jenkins_user_name }}"
+        state: present
+        key: "{{ hostvars['jenkins-master']['ssh_key_info']['ssh_public_key'] }}"
+    - name: Create agent_dir
+      ansible.builtin.file:
+        path: "{{ jenkins_agent_dir }}"
+        state: directory
+        owner: "{{ jenkins_user_name }}"
+        group: "{{ jenkins_user_group }}"
+        mode: "0777"
+    - name: Add docker repo
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/centos/docker-ce.repo
+        dest: /etc/yum.repos.d/docker-ce.repo
+        validate_certs: false
+        mode: "0755"
+    - name: Install some required
+      ansible.builtin.dnf:
+        name:
+          - git
+          - python3
+          - python3-pip
+          - moby-engine
+        state: present
+    - name: Update pip
+      ansible.builtin.pip:
+        executable: pip3
+        name: pip
+        extra_args: --upgrade
+    - name: Install Ansible
+      ansible.builtin.pip:
+        executable: pip3
+        name:
+          - selinux
+          - ansible
+          - molecule
+          - molecule-docker
+        state: present
+    - name: Reinstall Selinux
+      ansible.builtin.pip:
+        executable: pip3
+        name:
+          - selinux
+        state: forcereinstall
+        extra_args: --ignore-installed
+    - name: Add local to PATH
+      become: true
+      become_user: "{{ jenkins_user_name }}"
+      ansible.builtin.lineinfile:
+        dest: ~/.bashrc
+        regexp: export PATH=$PATH:/home/jenkins/.local/bin
+        line: export PATH=$PATH:/home/jenkins/.local/bin
+    - name: Create docker group
+      ansible.builtin.group:
+        name: docker
+        state: present
+    - name: Add jenkinsuser to dockergroup
+      ansible.builtin.user:
+        name: "{{ jenkins_user_name }}"
+        groups: docker
+    - name: Restart docker
+      ansible.builtin.systemd:
+        name: docker
+        state: restarted
+        enabled: true
+    - name: Install agent.jar
+      ansible.builtin.get_url:
+        url: "http://{{ hostvars['jenkins-master']['ansible_host'] }}:8080/jnlpJars/agent.jar"
+        dest: "{{ jenkins_agent_dir }}"
+        owner: "{{ jenkins_user_name }}"
+        group: "{{ jenkins_user_group }}"
+        mode: "0777"
+      register: install_agent
+      until: install_agent is succeeded
+      retries: 10
+      timeout: 10
+- name: SConfigure Jenkins master
+  hosts: jenkins_masters
+  become: true
+  become_user: root
+  tasks:
+    - name: Get jenkins-master initial admin password from file
+      ansible.builtin.slurp:
+        src: /var/lib/jenkins/secrets/initialAdminPassword
+      register: jenkins_master_pass
+    - name: Print pass
+      ansible.builtin.debug:
+        msg:
+          - "Please see http://{{ hostvars['jenkins-master']['ansible_host'] }}:8080"
+          - "And paste next {{ jenkins_master_pass.content | b64decode | split('\n') | first }}"
+    - name: Pause
+      ansible.builtin.pause:
