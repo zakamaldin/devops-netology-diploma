@@ -194,3 +194,16 @@ variable "ingress_metadata" {
   }
   description = "Default resources of k8s ingress gateway controller chart"
 }
+
+### regisrty vars
+variable "registry_name" {
+  type        = string
+  default     = "zakamaldin-diploma-registry"
+  description = "Docker registry name"
+}
+
+variable "registry_sa_name" {
+  type        = string
+  default     = "zakamaldin-diploma-registry-sa"
+  description = "Docker registry sa name"
+}

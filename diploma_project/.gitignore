@@ -8,3 +8,9 @@
 
 # own secret vars store.
 personal.auto.tfvars
+
+# sa key.json
+key.json
+
+# regidtry token
+registry_token.txt
