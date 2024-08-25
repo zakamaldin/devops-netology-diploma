@@ -174,3 +174,23 @@ variable "monitoring_metadata" {
   }
   description = "Default resources of kube-prometheus-stack chart"
 }
+
+### ingress vars
+variable "ingress_metadata" {
+  type = object({
+    name       = string
+    namespace  = string
+    version    = string
+    repository = string
+    chart      = string
+  })
+
+  default = {
+    name       = "ingress-nginx"
+    namespace  = "ingress"
+    version    = "4.1.1"
+    repository = "https://kubernetes.github.io/ingress-nginx"
+    chart      = "ingress-nginx"
+  }
+  description = "Default resources of k8s ingress gateway controller chart"
+}

@@ -13,3 +13,8 @@ resource "helm_release" "ingress-nginx" {
   repository = var.ingress_metadata.repository
   chart      = var.ingress_metadata.chart
 }
+
+resource "kubectl_manifest" "ingress-monitoring" {
+  depends_on = [ helm_release.ingress-nginx,  helm_release.kube-prometheus ]
+  yaml_body = file("${path.module}/monitoring/ingress-monitoring.yaml")
+}

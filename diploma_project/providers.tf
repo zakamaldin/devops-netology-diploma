@@ -3,6 +3,11 @@ terraform {
     yandex = {
       source = "yandex-cloud/yandex"
     }
+    
+    kubectl = {
+      source  = "gavinbunney/kubectl"
+      version = ">= 1.7.0"
+    }
   }
   required_version = ">=0.13"
 
@@ -34,5 +39,9 @@ provider "helm" {
 }
 
 provider "kubernetes" {
+  config_path = pathexpand(var.kube_config)
+}
+
+provider "kubectl" {
   config_path = pathexpand(var.kube_config)
 }
