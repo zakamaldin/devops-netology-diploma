@@ -1,0 +1,42 @@
+{
+    "name": "{{ item }}",
+    "nodeDescription": "",
+    "numExecutors": "4",
+    "remoteFS": "{{ jenkins_agent_dir }}",
+    "labelString": "linux",
+    "mode": "NORMAL",
+    "": [
+      "hudson.plugins.sshslaves.SSHLauncher",
+      "0"
+    ],
+    "launcher": {
+      "stapler-class": "hudson.plugins.sshslaves.SSHLauncher",
+      "$class": "hudson.plugins.sshslaves.SSHLauncher",
+      "host": "{{ hostvars[item].ansible_host }}",
+      "includeUser": "false",
+      "credentialsId": "master-node-ssh-cred",
+      "": "0",
+      "sshHostKeyVerificationStrategy": {
+        "stapler-class": "hudson.plugins.sshslaves.verifiers.KnownHostsFileKeyVerificationStrategy",
+        "$class": "hudson.plugins.sshslaves.verifiers.KnownHostsFileKeyVerificationStrategy"
+      },
+      "port": "22",
+      "javaPath": "",
+      "jvmOptions": "",
+      "prefixStartSlaveCmd": "",
+      "suffixStartSlaveCmd": "",
+      "launchTimeoutSeconds": "",
+      "maxNumRetries": "",
+      "retryWaitTime": "",
+      "tcpNoDelay": true,
+      "workDir": ""
+    },
+    "retentionStrategy": {
+      "stapler-class": "hudson.slaves.RetentionStrategy$Always",
+      "$class": "hudson.slaves.RetentionStrategy$Always"
+    },
+    "nodeProperties": {
+      "stapler-class-bag": "true"
+    },
+    "type": "hudson.slaves.DumbSlave"
+  }

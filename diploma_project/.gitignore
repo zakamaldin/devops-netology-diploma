@@ -13,7 +13,11 @@ personal.auto.tfvars
 key.json
 
 # regidtry token
-registry_token.txt
+*registry_token
 
 # ansible hosts
 *hosts.yml
+
+# kubectl settings
+*kube_config
+*ca.pem

@@ -20,14 +20,9 @@ resource "yandex_container_registry_iam_binding" "zakamaldin-diploma-registry-sa
   members     = ["serviceAccount:${yandex_iam_service_account.zakamaldin-diploma-registry-sa.id}"]
 }
 
-resource "null_resource" "get_iam_token" {
+resource "null_resource" "get_registry_token" {
   depends_on = [yandex_container_registry.zakamaldin-diploma-registry, yandex_container_registry_iam_binding.zakamaldin-diploma-registry-sa-pusher ]
   provisioner "local-exec" {
-    command = "/bin/bash get_iam_token.sh"
+    command = "/bin/bash get_registry_token.sh"
   }
-}
-
-data "local_file" "iam_token" {
-  depends_on = [ null_resource.get_iam_token ]
-  filename = "${path.module}/registry_token.txt"
 }

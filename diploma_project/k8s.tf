@@ -114,3 +114,10 @@ resource "null_resource" "get_kube_config" {
     command = "yc config profile activate default && yc managed-kubernetes cluster get-credentials k8s-netology-cluster --external --force"
   }
 }
+
+resource "null_resource" "create_kube_config_for_jenkins_nodes" {
+  depends_on = [ null_resource.get_kube_config ]
+  provisioner "local-exec" {
+    command = "/bin/bash create_kube_config_file.sh ${yandex_kubernetes_cluster.regional_k8s_cluster.id} ${var.k8s_cluster_metadata.name}"
+  }
+}

@@ -1,0 +1,9 @@
+<com.cloudbees.jenkins.plugins.sshcredentials.impl.BasicSSHUserPrivateKey plugin="ssh-credentials@1.13">
+  <scope>GLOBAL</scope>
+  <id>master-node-ssh-cred</id>
+  <description>Master node ssh key credential</description>
+  <username>jenkins</username>
+  <privateKeySource class="com.cloudbees.jenkins.plugins.sshcredentials.impl.BasicSSHUserPrivateKey$DirectEntryPrivateKeySource">
+    <privateKey>{{ master_node_ssh_private_key_file["content"] | b64decode }}</privateKey>
+  </privateKeySource>
+</com.cloudbees.jenkins.plugins.sshcredentials.impl.BasicSSHUserPrivateKey>

@@ -7,3 +7,4 @@ java_packages:
   - java-17-openjdk-devel
   - java-17-openjdk
 jenkins_agent_dir: /opt/jenkins_agent/
+jenkins_master_home: /var/lib/jenkins/

@@ -25,7 +25,6 @@
       ansible.builtin.package:
         name: "{{ java_packages }}"
         state: present
-
 - name: Get Jenkins master installed
   hosts: jenkins_masters
   become: true
@@ -59,7 +58,7 @@
       ansible.builtin.known_hosts:
         name: "{{ hostvars[item].ansible_host }}"
         state: present
-        key: "{{ lookup('pipe', 'ssh-keyscan {{ hostvars[item].ansible_host }}') }}"
+        key: "{{ lookup('pipe', 'ssh-keyscan -t rsa {{ hostvars[item].ansible_host }}') }}"
         hash_host: true
       with_items: "{{ groups.jenkins_agents }}"
   handlers:
@@ -93,6 +92,14 @@
         dest: /etc/yum.repos.d/docker-ce.repo
         validate_certs: false
         mode: "0755"
+    - name: Add kubernetes repo
+      ansible.builtin.yum_repository:
+        name: Kubernetes
+        description: Kubernetes repo
+        baseurl: https://pkgs.k8s.io/core:/stable:/v1.31/rpm/
+        enabled: true
+        gpgcheck: true
+        gpgkey: https://pkgs.k8s.io/core:/stable:/v1.31/rpm/repodata/repomd.xml.key
     - name: Install some required
       ansible.builtin.dnf:
         name:
@@ -100,28 +107,9 @@
           - python3
           - python3-pip
           - moby-engine
+          - kubectl
+          - helm
         state: present
-    - name: Update pip
-      ansible.builtin.pip:
-        executable: pip3
-        name: pip
-        extra_args: --upgrade
-    - name: Install Ansible
-      ansible.builtin.pip:
-        executable: pip3
-        name:
-          - selinux
-          - ansible
-          - molecule
-          - molecule-docker
-        state: present
-    - name: Reinstall Selinux
-      ansible.builtin.pip:
-        executable: pip3
-        name:
-          - selinux
-        state: forcereinstall
-        extra_args: --ignore-installed
     - name: Add local to PATH
       become: true
       become_user: "{{ jenkins_user_name }}"
@@ -153,19 +141,143 @@
       until: install_agent is succeeded
       retries: 10
       timeout: 10
-- name: SConfigure Jenkins master
+    - name: Create .kube directory
+      ansible.builtin.file:
+        path: /home/{{ jenkins_user_name }}/.kube
+        state: directory
+        owner: "{{ jenkins_user_name }}"
+        group: "{{ jenkins_user_group }}"
+        mode: "0744"
+    - name: Put kube config to agents
+      ansible.builtin.copy:
+        src: kube_config
+        dest: /home/{{ jenkins_user_name }}/.kube/config
+        owner: "{{ jenkins_user_name }}"
+        group: "{{ jenkins_user_group }}"
+        mode: "0644"
+        force: true
+    - name: Put k8s cluster certificate to agents
+      ansible.builtin.copy:
+        src: ca.pem
+        dest: /home/{{ jenkins_user_name }}/.kube/ca.pem
+        owner: "{{ jenkins_user_name }}"
+        group: "{{ jenkins_user_group }}"
+        mode: "0644"
+        force: true
+    - name: Add certificate to context
+      become: true
+      become_user: "{{ jenkins_user_name }}"
+      ansible.builtin.command: kubectl config set-cluster k8s-netology-cluster --certificate-authority=/home/{{ jenkins_user_name }}/.kube/ca.pem
+      register: kubectl_output
+      changed_when: kubectl_output.rc != 0
+    - name: Switch kubectl context
+      become: true
+      become_user: "{{ jenkins_user_name }}"
+      ansible.builtin.command: kubectl config use-context default
+      register: kubectl_output
+      changed_when: kubectl_output.rc != 0
+    - name: Check connection from agent to k8s cluster
+      become: true
+      become_user: "{{ jenkins_user_name }}"
+      ansible.builtin.command: kubectl cluster-info
+      register: kubectl_output
+      changed_when: kubectl_output.rc != 0
+- name: Configure Jenkins master
   hosts: jenkins_masters
   become: true
-  become_user: root
+  become_user: "{{ jenkins_user_name }}"
   tasks:
+    - name: Check ssh connect between jenkins master node and jenkins agents nodes
+      ansible.builtin.command: "ssh {{ jenkins_user_name }}@{{ hostvars[item].ansible_host }} 'hostname'"
+      register: ssh_output
+      changed_when: ssh_output.rc != 0
+      with_items: "{{ groups.jenkins_agents }}"
     - name: Get jenkins-master initial admin password from file
+      become: true
+      become_user: root
       ansible.builtin.slurp:
-        src: /var/lib/jenkins/secrets/initialAdminPassword
+        src: "{{ jenkins_master_home }}/secrets/initialAdminPassword"
+      ignore_errors: true
       register: jenkins_master_pass
     - name: Print pass
       ansible.builtin.debug:
         msg:
           - "Please see http://{{ hostvars['jenkins-master']['ansible_host'] }}:8080"
-          - "And paste next {{ jenkins_master_pass.content | b64decode | split('\n') | first }}"
+          - "And pass activation token: {{ jenkins_master_pass.content | b64decode | split('\n') | first }}"
+      when: jenkins_master_pass is defined and jenkins_master_pass['content'] is defined
     - name: Pause
       ansible.builtin.pause:
+        echo: false
+        prompt: "Please create admin user token via UI and print here:"
+      register: jenkins_admin_token
+    - name: Convert ssh key from OpenSSH format to old RSA PEM format
+      ansible.builtin.command: ssh-keygen -q -p -m PEM -f ~/.ssh/id_rsa -C "" -N ""
+      register: keygen_output
+      changed_when: keygen_output.rc != 0
+    - name: Get private ssh key from master node
+      ansible.builtin.slurp:
+        src: "~/.ssh/id_rsa"
+      register: master_node_ssh_private_key_file
+    - name: Put master node ssh-cred into Jenkins cred store
+      ansible.builtin.uri:
+        url: http://localhost:8080/manage/credentials/store/system/domain/_/createCredentials
+        method: POST
+        headers:
+          Content-Type: "application/xml"
+        force_basic_auth: true
+        user: admin
+        password: "{{ jenkins_admin_token.user_input }}"
+        return_content: true
+        status_code: [200, 302, 409]
+        body: "{{ lookup('template', 'master-node-ssh-cred.xml.j2') }}"
+    - name: Put registry token in credential store
+      vars:
+        secret_id: "registry_token"
+        secret: "{{ lookup('file', 'registry_token') }}"
+      ansible.builtin.uri:
+        url: http://localhost:8080/manage/credentials/store/system/domain/_/createCredentials
+        method: POST
+        headers:
+          Content-Type: "application/xml"
+        force_basic_auth: true
+        user: admin
+        password: "{{ jenkins_admin_token.user_input }}"
+        return_content: true
+        status_code: [200, 302, 409]
+        body: "{{ lookup('template', 'secret.xml.j2') }}"
+    - name: Add jenkins agents via api
+      ansible.builtin.uri:
+        url: http://localhost:8080/computer/doCreateItem?name={{ item }}&type=hudson.slaves.DumbSlave
+        method: POST
+        body_format: form-urlencoded
+        force_basic_auth: true
+        user: admin
+        password: "{{ jenkins_admin_token.user_input }}"
+        return_content: true
+        status_code: [200, 302, 400]
+        body: "json={{ lookup('template', 'agent.json.j2') }}"
+      with_items: "{{ groups.jenkins_agents }}"
+    - name: Disable master as builder node
+      ansible.builtin.uri:
+        url: http://localhost:8080/computer/(built-in)/toggleOffline
+        method: POST
+        body_format: form-urlencoded
+        force_basic_auth: true
+        user: admin
+        password: "{{ jenkins_admin_token.user_input }}"
+        return_content: true
+        status_code: [200, 302]
+        body: 'json={"offlineMessage":""}'
+    - name: Create pipeline job
+      ansible.builtin.uri:
+        url: http://localhost:8080/createItem?name=diploma
+        method: POST
+        headers:
+          Content-Type: "application/xml"
+        body_format: form-urlencoded
+        force_basic_auth: true
+        user: admin
+        password: "{{ jenkins_admin_token.user_input }}"
+        return_content: true
+        status_code: [200, 302, 400]
+        body: "{{ lookup('file', 'job.xml') }}"
