@@ -32,9 +32,6 @@
         <hudson.plugins.git.BranchSpec>
           <name>*/tags/*</name>
         </hudson.plugins.git.BranchSpec>
-        <hudson.plugins.git.BranchSpec>
-          <name>*/main</name>
-        </hudson.plugins.git.BranchSpec>
       </branches>
       <doGenerateSubmoduleConfigurations>false</doGenerateSubmoduleConfigurations>
       <submoduleCfg class="empty-list"/>

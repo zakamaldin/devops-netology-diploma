@@ -12,8 +12,9 @@ personal.auto.tfvars
 # sa key.json
 key.json
 
-# regidtry token
+# registry
 *registry_token
+*registry_id
 
 # ansible hosts
 *hosts.yml

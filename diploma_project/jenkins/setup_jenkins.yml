@@ -245,6 +245,21 @@
         return_content: true
         status_code: [200, 302, 409]
         body: "{{ lookup('template', 'secret.xml.j2') }}"
+    - name: Put registry ID in credential store
+      vars:
+        secret_id: "registry_id"
+        secret: "{{ lookup('file', 'registry_id') }}"
+      ansible.builtin.uri:
+        url: http://localhost:8080/manage/credentials/store/system/domain/_/createCredentials
+        method: POST
+        headers:
+          Content-Type: "application/xml"
+        force_basic_auth: true
+        user: admin
+        password: "{{ jenkins_admin_token.user_input }}"
+        return_content: true
+        status_code: [200, 302, 409]
+        body: "{{ lookup('template', 'secret.xml.j2') }}"
     - name: Add jenkins agents via api
       ansible.builtin.uri:
         url: http://localhost:8080/computer/doCreateItem?name={{ item }}&type=hudson.slaves.DumbSlave
@@ -268,9 +283,9 @@
         return_content: true
         status_code: [200, 302]
         body: 'json={"offlineMessage":""}'
-    - name: Create pipeline job
+    - name: Create pipeline job for building from branch
       ansible.builtin.uri:
-        url: http://localhost:8080/createItem?name=diploma
+        url: http://localhost:8080/createItem?name=build_on_branch_push
         method: POST
         headers:
           Content-Type: "application/xml"
@@ -280,4 +295,36 @@
         password: "{{ jenkins_admin_token.user_input }}"
         return_content: true
         status_code: [200, 302, 400]
-        body: "{{ lookup('file', 'job.xml') }}"
+        body: "{{ lookup('file', 'job_build_branch.xml') }}"
+    - name: Create pipeline job for building from tags
+      ansible.builtin.uri:
+        url: http://localhost:8080/createItem?name=build_on_tags_push
+        method: POST
+        headers:
+          Content-Type: "application/xml"
+        body_format: form-urlencoded
+        force_basic_auth: true
+        user: admin
+        password: "{{ jenkins_admin_token.user_input }}"
+        return_content: true
+        status_code: [200, 302, 400]
+        body: "{{ lookup('file', 'job_build_tags.xml') }}"
+    - name: Install Jenkins usefull plugins
+      tags: new
+      ansible.builtin.uri:
+        url: http://localhost:8080/manage/pluginManager/install
+        method: POST
+        body_format: form-urlencoded
+        force_basic_auth: true
+        user: admin
+        # password: "{{ jenkins_admin_token.user_input }}
+        password: 11c861325a81423ff0a124ee72f63465f6
+        return_content: true
+        status_code: [200, 302, 400]
+        body:
+        - ["dynamicLoad", ""]
+        - ["plugin.{{ item }}.default", "on"]
+      loop:
+        - pipeline-utility-steps
+        - pipeline-stage-view
+        - rebuild
