@@ -272,17 +272,6 @@
         status_code: [200, 302, 400]
         body: "json={{ lookup('template', 'agent.json.j2') }}"
       with_items: "{{ groups.jenkins_agents }}"
-    - name: Disable master as builder node
-      ansible.builtin.uri:
-        url: http://localhost:8080/computer/(built-in)/toggleOffline
-        method: POST
-        body_format: form-urlencoded
-        force_basic_auth: true
-        user: admin
-        password: "{{ jenkins_admin_token.user_input }}"
-        return_content: true
-        status_code: [200, 302]
-        body: 'json={"offlineMessage":""}'
     - name: Create pipeline job for building from branch
       ansible.builtin.uri:
         url: http://localhost:8080/createItem?name=build_on_branch_push
@@ -310,15 +299,13 @@
         status_code: [200, 302, 400]
         body: "{{ lookup('file', 'job_build_tags.xml') }}"
     - name: Install Jenkins usefull plugins
-      tags: new
       ansible.builtin.uri:
         url: http://localhost:8080/manage/pluginManager/install
         method: POST
         body_format: form-urlencoded
         force_basic_auth: true
         user: admin
-        # password: "{{ jenkins_admin_token.user_input }}
-        password: 11c861325a81423ff0a124ee72f63465f6
+        password: "{{ jenkins_admin_token.user_input }}"
         return_content: true
         status_code: [200, 302, 400]
         body:
@@ -328,3 +315,15 @@
         - pipeline-utility-steps
         - pipeline-stage-view
         - rebuild
+    - name: Disable master as builder node
+      ansible.builtin.uri:
+        url: http://localhost:8080/computer/(built-in)/toggleOffline
+        method: POST
+        body_format: form-urlencoded
+        force_basic_auth: true
+        user: admin
+        password: "{{ jenkins_admin_token.user_input }}"
+        return_content: true
+        status_code: [200, 302]
+        body:
+          offlineMessage: ""
